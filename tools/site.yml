@@ -1,0 +1,130 @@
+# see http://docs.ansible.com/ansible/ec2_module.html
+---
+# create security group
+- hosts: localhost
+  connection: local
+  gather_facts: False
+  tasks:
+    - name: Kafka cluster security group
+      ec2_group:
+        name: kafka-cluster-sg
+        description: EC2 group for Kafka cluster
+        vpc_id: vpc-be157ddb
+        region: eu-west-1
+        #aws_secret_key: SECRET
+        #aws_access_key: ACCESS
+        rules:
+          - proto: tcp
+            from_port: 22
+            to_port: 22
+            cidr_ip: 0.0.0.0/0
+          - proto: tcp
+            from_port: 9092
+            to_port: 9092
+            cidr_ip: 0.0.0.0/0
+          - proto: tcp
+            from_port: 2181
+            to_port: 2181
+            cidr_ip: 0.0.0.0/0
+            # kafka default port, see https://kafka.apache.org/08/configuration.html
+          - proto: tcp
+            from_port: 6667
+            to_port: 6667
+            cidr_ip: 0.0.0.0/0
+
+# launch Kafka instances
+- hosts: localhost
+  connection: local
+  gather_facts: False
+  tasks:
+    - name: Provision a set of instances for kafka
+      ec2:
+         key_name: data-pipeline-dev
+         region: eu-west-1
+         group: kafka-cluster-sg
+         instance_type: m3.2xlarge
+         image: ami-33734044
+         vpc_subnet_id: subnet-a9a28ade
+         assign_public_ip: yes
+         wait: true
+         wait_timeout: 500
+         exact_count: 1
+         count_tag:
+            Name: kafka
+         instance_tags:
+            Name: kafka
+      register: ec2
+    - name: Add all instance public IPs to host group
+      add_host: hostname={{ item.public_ip }} groups=kafka_hosts
+      with_items: ec2.instances
+    - name: Wait for SSH to come up
+      wait_for: host={{ item.public_dns_name }} port=22 delay=60 timeout=320 state=started
+      with_items: ec2.instances
+
+# launch zookeeper instances
+- hosts: localhost
+  connection: local
+  gather_facts: False
+  tasks:
+    - name: Provision a set of instances for zookeeper
+      ec2:
+         key_name: data-pipeline-dev
+         region: eu-west-1
+         group: kafka-cluster-sg
+         instance_type: m3.large
+         image: ami-33734044
+         vpc_subnet_id: subnet-a9a28ade
+         assign_public_ip: yes
+         wait: true
+         wait_timeout: 500
+         exact_count: 1
+         count_tag:
+            Name: zookeeper
+         instance_tags:
+            Name: zookeeper
+      register: ec2
+    - name: Add all instance public IPs to host group
+      add_host: hostname={{ item.public_ip }} groups=zookeeper_hosts
+      with_items: ec2.instances
+    - name: Wait for SSH to come up
+      wait_for: host={{ item.public_dns_name }} port=22 delay=60 timeout=320 state=started
+      with_items: ec2.instances
+
+# install kafka
+- hosts: kafka_hosts
+  name: configuration Kafka hosts
+  user: centos
+  gather_facts: true
+  tasks:
+    - name: Copying supervisord config file
+      become: yes
+      become_user: root
+      copy: src=supervisord.conf dest=/etc/supervisord.conf owner=root group=root mode=0644
+    - name: install supervisor
+      become: yes
+      shell: easy_install supervisor
+    - name: Run script for Kafka install
+      script: install_kafka.sh
+    - name: Run supervisor
+      become: yes
+      shell: supervisord -c /etc/supervisord.conf
+
+# install zookeeper
+- hosts: zookeeper_hosts
+  name: configuration Zookeeper hosts
+  user: centos
+  gather_facts: true
+  tasks:
+    - name: Copying supervisord config file
+      become: yes
+      become_user: root
+      copy: src=supervisord.conf dest=/etc/supervisord.conf owner=root group=root mode=0644
+    - name: install supervisor
+      become: yes
+      shell: easy_install supervisor
+    - name: Run script for Kafka install
+      script: install_kafka.sh
+    - name: Run supervisor
+      become: yes
+      shell: supervisord -c /etc/supervisord.conf
+

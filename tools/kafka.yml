@@ -1,0 +1,57 @@
+---
+- hosts: localhost
+  connection: local
+  gather_facts: False
+
+  tasks:
+    - name: Provision a EC2 instances for Kafka
+      ec2:
+         key_name: data-pipeline-dev
+         region: eu-west-1
+         group: kafka
+         instance_type: m3.2xlarge
+         image: ami-33734044
+         wait: yes
+         wait_timeout: 500
+         count: 3 
+         instance_tags:
+            service: kafka
+         #monitoring: yes
+         vpc_subnet_id: subnet-a9a28ade
+         assign_public_ip: yes
+         register: ec2
+    - name: Add all instance public IPs to host group
+      add_host: hostname={{ item.public_ip }} groups=kafka_hosts
+      with_items: ec2.instances
+
+- hosts: localhost
+  connection: local
+  gather_facts: False
+  tasks:
+    - name: Provision a of instances for zookeeper
+      ec2:
+         key_name: data-pipeline-dev
+         group: zookeeper
+         instance_type: m3.large
+         image: ami-33734044
+         wait: yes
+         wait_timeout: 500
+         count: 1
+         instance_tags:
+            service: zookeeper
+         #register: present
+         #monitoring: yes
+         vpc_subnet_id: subnet-a9a28ade
+         assign_public_ip: yes
+    - name: Add all instance public IPs to host group
+      add_host: hostname={{ item.public_ip }} groups=zookeeper_hosts
+      with_items: ec2.instances
+
+- hosts: kafka_hosts
+  name: configuration play
+  user: ec2-user
+  gather_facts: true
+  tasks:
+     - name: Check NTP service
+       service: name=ntpd state=started
+
