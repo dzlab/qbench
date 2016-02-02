@@ -31,7 +31,8 @@ func randMsg(m []byte, generator rand.Rand) {
 	}
 }
 
-func putRecord(svc *firehose.Firehose, data []byte, total int) {
+func putRecord(svc Queue, data []byte, total int) {
+	//func putRecord(svc *firehose.Firehose, data []byte, total int) {
 	// pre-put
 	size := len(data)
 	sk := newKey("rate-" + strconv.Itoa(size) + "-sent")
@@ -49,14 +50,8 @@ func putRecord(svc *firehose.Firehose, data []byte, total int) {
 	// put
 	//ts := time.Now()
 	for i := 0; i < total; i++ {
-		params := &firehose.PutRecordInput{
-			DeliveryStreamName: aws.String(channel),
-			Record: &firehose.Record{
-				Data: data,
-			},
-		}
 		duration, err := Time(func() error {
-			_, err := svc.PutRecord(params)
+			err := svc.PutRecord(channel, data)
 			return err
 		})
 		reportFloat64(dk, float64(duration)/float64(time.Millisecond))
@@ -116,8 +111,14 @@ func putRecordBatch(svc *firehose.Firehose, data []byte, total, batch int) {
 	fmt.Printf("%d,%d,%d,%f\n", total, len(data), batch, duration)
 }
 
-func run() {
-	svc := newFirehose(*creds, "default", "eu-west-1")
+func run(brokers string) {
+	var svc Queue
+	if brokers == "" {
+		svc, _ = newFirehose(*creds, "default", "eu-west-1")
+	} else {
+		svc, _ = NewKafkaSyncProducer(brokers)
+	}
+
 	// Instantiate rand per producer to avoid mutex contention.
 	source := rand.NewSource(time.Now().UnixNano())
 	generator := rand.New(source)
@@ -144,8 +145,9 @@ func run() {
 }
 
 func main() {
+	brokers := os.Getenv("BROKERS")
 	// run bench task
-	go run()
+	go run(brokers)
 	// serve http (for aws beanstalk)
 	port := os.Getenv("PORT")
 	log.Printf("Listening on port %s..\n", port)

@@ -1,0 +1,19 @@
+---
+# This task installs and enables kafka
+- name: Copying supervisord config file
+  copy: src=kafka-supervisord.conf dest=/etc/supervisord.conf owner=root group=root mode=0644
+
+- name: ensure tar,wget related packages are installed
+  yum: name={{ item }} state=present
+  with_items:
+    - tar
+    - wget
+    
+- name: install supervisor
+  shell: easy_install supervisor
+- name: Run script for Kafka install
+  script: install_prerequisites.sh
+- name: Run supervisor
+  shell: supervisord -c /etc/supervisord.conf
+
+
