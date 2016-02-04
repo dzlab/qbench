@@ -10,8 +10,8 @@ wget --no-check-certificate --no-cookies --header "Cookie: oraclelicense=accept-
 sudo rpm -Uvh jdk-7u67-linux-x64.rpm
 rm jdk-7u67-linux-x64.rpm
 sudo sh -c 'echo "export JAVA_HOME=/usr/java/default" >> /etc/profile'
-sudo sh -c 'echo "export PATH=$PATH:$JAVA_HOME/bin" >> /etc/profile'
-sudo sh -c 'echo "export CLASSPATH=.:$JAVA_HOME/jre/lib:$JAVA_HOME/lib:$JAVA_HOME/lib/tools.jar" >> /etc/profile'
+#sudo sh -c 'echo "export PATH=$PATH:/usr/java/default/bin" >> /etc/profile'
+sudo sh -c 'echo "export CLASSPATH=.:/usr/java/default/jre/lib:/usr/java/default/lib:/usr/java/default/lib/tools.jar" >> /etc/profile'
 source /etc/profile
 
 echo "Downloading Kafka..."
@@ -25,10 +25,7 @@ sed -i 's/broker.id=0/broker.id='"$BROKER_ID"'/g' kafka_2.10-0.9.0.0/config/serv
 sudo mv kafka_2.10-0.9.0.0/ /opt/kafka
 sudo sh -c 'echo "# KAFKA_HOME" >> /etc/profile'
 sudo sh -c 'echo "export KAFKA_HOME=/opt/kafka" >> /etc/profile'
-sudo sh -c 'echo "export PATH=$PATH:$KAFKA_HOME/bin" >> /etc/profile'
+#sudo sh -c 'echo "export PATH=$PATH:KAFKA_HOME/bin" >> /etc/profile'
 source /etc/profile
-echo $ZOOKEEPER_HOST > ~/hosts
-#echo "Starting Kafka server..."
-#sudo
-#sudo /opt/kafka/bin/zookeeper-server-start.sh /opt/kafka/config/zookeeper.properties &
-#sudo /opt/kafka/bin/kafka-server-start.sh /opt/kafka/config/server.properties &
+sudo sh -c 'echo "export PATH=$PATH:/usr/java/default/bin:/opt/kafka/bin" >> /etc/profile'
+

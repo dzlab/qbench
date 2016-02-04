@@ -115,6 +115,7 @@
   name: configuration Zookeeper hosts
   environment:
     ZOOKEEPER_HOST: "{{ hostvars[groups['zookeeper_hosts'][0]]['ansible_eth0']['ipv4']['address'] }}"
+    SECOR_INSTALL_DIR: /opt/secor
   user: centos
   gather_facts: true
   tasks:
@@ -122,13 +123,17 @@
       become: yes
       become_user: root
       copy: src=kafka-supervisord.conf dest=/etc/supervisord.conf owner=root group=root mode=0644
+    - name: Copying Secor archive file
+      copy: src=secor-0.16-SNAPSHOT-bin.tar.gz dest=~/secor-0.16-SNAPSHOT-bin.tar.gz
+    - name: Copying Secor starter script
+      copy: src=start_secor.sh dest=~/start_secor.sh mode=0755
     - name: install supervisor
       become: yes
-      #environment:
-      #  ZOOKEEPER_HOST: "{{ hostvars[groups['zookeeper_hosts'][0]]['ansible_eth0']['ipv4']['address'] }}"
       shell: easy_install supervisor
     - name: Run script for Kafka install
       script: install_prerequisites.sh
+    - name: Run script for Secor install
+      script: install_secor.sh
     - name: Run supervisor
       become: yes
       shell: supervisord -c /etc/supervisord.conf
