@@ -62,7 +62,8 @@ func output() {
 func store(filename string, keys []string) {
 	f, err := os.Create(filename)
 	if err != nil {
-		log.Printf("Failed to open %s\n", filename, err)
+		log.Printf("Failed to open %s\n", filename)
+		log.Println(err)
 	}
 	defer f.Close()
 	// print header
