@@ -1,6 +1,8 @@
 *.swp
 *.swo
 qbench
+*.dat
+*.tar.gz
 
 # Elastic Beanstalk Files
 .elasticbeanstalk/*
