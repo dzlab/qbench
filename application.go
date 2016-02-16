@@ -14,13 +14,13 @@ import (
 	"time"
 )
 
-const (
-	channel = "auction_stream"
-)
-
 var (
-	chars = []byte("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890!@#$^&*(){}][:<>.")
-	creds = flag.String("credentials", "", "filename of AWS credentials")
+	chars   = []byte("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890!@#$^&*(){}][:<>.")
+	creds   = flag.String("credentials", "", "filename of AWS credentials")
+	channel = flag.String("c", "auction_stream", "Channel/topic on which the event will be pushed")
+	port    = flag.String("p", "", "Port number to listen on")
+	brokers = flag.String("b", "", "Kafka brokers")
+	total   = flag.Int("t", 1000, "Total number of messages to send upstream")
 )
 
 // Returns a random message generated from the chars byte slice.
@@ -31,7 +31,7 @@ func randMsg(m []byte, generator rand.Rand) {
 	}
 }
 
-func putRecord(svc Queue, data []byte, total int) {
+func putRecord(svc Queue, channel string, data []byte, total int) {
 	//func putRecord(svc *firehose.Firehose, data []byte, total int) {
 	// pre-put
 	size := len(data)
@@ -74,7 +74,7 @@ func putRecord(svc Queue, data []byte, total int) {
 	fmt.Printf("Pushed a message of %d bytes %d times\n", len(data), total)
 }
 
-func putRecordBuffered(svc *firehose.Firehose, data []byte, total, batch int) {
+func putRecordBuffered(svc *firehose.Firehose, channel string, data []byte, total, batch int) {
 	ts := time.Now()
 	for i := 0; i < total/batch; i++ {
 		var buf []byte
@@ -93,7 +93,7 @@ func putRecordBuffered(svc *firehose.Firehose, data []byte, total, batch int) {
 	fmt.Printf("%d,%d,%d,%f\n", total, len(data), batch, duration)
 }
 
-func putRecordBatch(svc *firehose.Firehose, data []byte, total, batch int) {
+func putRecordBatch(svc *firehose.Firehose, channel string, data []byte, total, batch int) {
 	ts := time.Now()
 	for i := 0; i < total/batch; i++ {
 		var records []*firehose.Record
@@ -111,28 +111,28 @@ func putRecordBatch(svc *firehose.Firehose, data []byte, total, batch int) {
 	fmt.Printf("%d,%d,%d,%f\n", total, len(data), batch, duration)
 }
 
-func run(brokers string) {
+func run(brokers, channel string) {
 	var svc Queue
 	if brokers == "" {
 		svc, _ = newFirehose(*creds, "default", "eu-west-1")
 	} else {
 		svc, _ = NewKafkaSyncProducer(brokers)
 	}
-
 	// Instantiate rand per producer to avoid mutex contention.
 	source := rand.NewSource(time.Now().UnixNano())
 	generator := rand.New(source)
 
-	totals := []int{1000} //, 5000, 10000, 20000, 50000}
+	//totals := []int{1000} //, 5000, 10000, 20000, 50000}
+	totals := []int{*total}
 	//batchs := []int{50, 100, 200, 350, 500}
-	sizes := []int{1000000, 2500, 1200, 600, 300, 100}
+	sizes := []int{100, 300, 600, 1200, 2500, 10000}
 	//fmt.Printf("time,size,batch,duration\n")
 	for _, size := range sizes {
 		data := make([]byte, size)
 		randMsg(data, *generator)
 		for _, total := range totals {
 			// testing put
-			putRecord(svc, data, total)
+			putRecord(svc, channel, data, total)
 			/*for _, batch := range batchs {
 				// testing put batch
 				putRecordBuffered(svc, data, total, batch)
@@ -145,14 +145,19 @@ func run(brokers string) {
 }
 
 func main() {
-	brokers := os.Getenv("BROKERS")
+	flag.Parse()
+	if b := os.Getenv("BROKERS"); b != "" && *brokers == "" {
+		*brokers = b
+	}
+	if p := os.Getenv("PORT"); p != "" && *port == "" {
+		*port = p
+	}
 	// run bench task
-	go run(brokers)
+	go run(*brokers, *channel)
 	// serve http (for aws beanstalk)
-	port := os.Getenv("PORT")
-	log.Printf("Listening on port %s..\n", port)
+	log.Printf("Listening on port %s..\n", *port)
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, "Hello, %q", r.URL.Path)
 	})
-	http.ListenAndServe(":"+port, nil)
+	http.ListenAndServe(":"+*port, nil)
 }
