@@ -74,9 +74,9 @@ func NewKafkaSyncProducer(brokers string) (*Kafka, error) {
 
 // publish an array of data on a Kafka channel
 func (this *Kafka) PutRecord(channel string, data []byte) error {
-	key := RandomString(8)
+	//key := RandomString(8)
 	msg := sarama.ProducerMessage{Topic: channel,
-		Key:   sarama.StringEncoder(key),
+		//Key:   sarama.StringEncoder(key),
 		Value: sarama.ByteEncoder(data)}
 	partition, offset, err := this.sp.SendMessage(&msg)
 	log.Printf("Message is stored in topic(%s)/partition(%d)/offset(%d)\n", channel, partition, offset)
