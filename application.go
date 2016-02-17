@@ -5,8 +5,9 @@ import (
 	"fmt"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/firehose"
+	"github.com/satori/go.uuid"
 	"log"
-	"math/rand"
+	//"math/rand"
 	"net/http"
 	"os"
 	"strconv"
@@ -23,12 +24,10 @@ var (
 	total   = flag.Int("t", 1000, "Total number of messages to send upstream")
 )
 
-// Returns a random message generated from the chars byte slice.
-// Message length of m bytes as defined by msgSize.
-func randMsg(m []byte, generator rand.Rand) {
-	for i := range m {
-		m[i] = chars[generator.Intn(len(chars))]
-	}
+type Msg struct {
+	id        string
+	timestamp string
+	size      int
 }
 
 func putRecord(svc Queue, channel string, data []byte, total int) {
@@ -119,8 +118,9 @@ func run(brokers, channel string) {
 		svc, _ = NewKafkaSyncProducer(brokers)
 	}
 	// Instantiate rand per producer to avoid mutex contention.
-	source := rand.NewSource(time.Now().UnixNano())
-	generator := rand.New(source)
+	//source := rand.NewSource(time.Now().UnixNano())
+	//generator := &BytesGenerator{generator: rand.New(source)}
+	generator, _ := NewJsonGenerator("dump", "{'id': '{{.id}}', 'timestamp': {{.timestamp}}}")
 
 	//totals := []int{1000} //, 5000, 10000, 20000, 50000}
 	totals := []int{*total}
@@ -128,8 +128,9 @@ func run(brokers, channel string) {
 	sizes := []int{100, 300, 600, 1200, 2500, 10000}
 	//fmt.Printf("time,size,batch,duration\n")
 	for _, size := range sizes {
-		data := make([]byte, size)
-		randMsg(data, *generator)
+		//data := generator.Generate(size)
+		msg := Msg{id: uuid.NewV4().String(), timestamp: time.Now().Format(time.RFC3339), size: size}
+		data := generator.Generate(msg)
 		for _, total := range totals {
 			// testing put
 			putRecord(svc, channel, data, total)
