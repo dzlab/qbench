@@ -12,6 +12,7 @@ sudo sed -i 's/aws.access.key=.*/aws.access.key='"${AWS_ACCESS_KEY_ID}"'/g' ${SE
 sudo sed -i 's/aws.secret.key=.*/aws.secret.key='"${AWS_SECRET_ACCESS_KEY}"'/g' ${SECOR_INSTALL_DIR}/secor.common.properties
 #sudo sed -i 's/secor.s3.filesystem=s3n/secor.s3.filesystem=s3a/g' ${SECOR_INSTALL_DIR}/secor.common.properties
 sudo sed -i 's/secor.s3.bucket=.*/secor.s3.bucket=adomik-firehose-dump/g' ${SECOR_INSTALL_DIR}/secor.prod.properties 
+sudo sed -i 's/secor.max.file.size.bytes=.*/secor.max.file.size.bytes=50000000/g' ${SECOR_INSTALL_DIR}/secor.prod.properties 
 # configure zookeeper connection
 sudo sed -i 's/zookeeper.quorum=.*/zookeeper.quorum='"$ZOOKEEPER_HOST"':2181/g' ${SECOR_INSTALL_DIR}/secor.prod.properties
 # configure kafka broker connection
