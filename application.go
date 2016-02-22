@@ -7,11 +7,9 @@ import (
 	"github.com/aws/aws-sdk-go/service/firehose"
 	"github.com/satori/go.uuid"
 	"log"
-	//"math/rand"
+	"math/rand"
 	"net/http"
 	"os"
-	"strconv"
-	"sync/atomic"
 	"time"
 )
 
@@ -21,7 +19,9 @@ var (
 	channel = flag.String("c", "auction_stream", "Channel/topic on which the event will be pushed")
 	port    = flag.String("p", "", "Port number to listen on")
 	brokers = flag.String("b", "", "Kafka brokers")
+	msg     = flag.String("m", "", "Type of messages: bytes, json")
 	total   = flag.Int("t", 1000, "Total number of messages to send upstream")
+	size    = flag.Int("s", -1, "Size of messages to send upstream")
 )
 
 type Msg struct {
@@ -31,45 +31,13 @@ type Msg struct {
 }
 
 func putRecord(svc Queue, channel string, data []byte, total int) {
-	//func putRecord(svc *firehose.Firehose, data []byte, total int) {
+	uploader := NewRecordUploader(svc, len(data))
 	// pre-put
-	size := len(data)
-	sk := newKey("rate-" + strconv.Itoa(size) + "-sent")
-	fk := newKey("rate-" + strconv.Itoa(size) + "-failed")
-	dk := newKey("duration-" + strconv.Itoa(size))
-	var sent, failed uint32
-	ticker := time.NewTicker(time.Second * 1)
-	go func() {
-		for _ = range ticker.C {
-			//fmt.Println("Tick")
-			report(sk, &sent)
-			report(fk, &failed)
-		}
-	}()
+	uploader.PreUpload()
 	// put
-	//ts := time.Now()
-	for i := 0; i < total; i++ {
-		duration, err := Time(func() error {
-			err := svc.PutRecord(channel, data)
-			return err
-		})
-		reportFloat64(dk, float64(duration)/float64(time.Millisecond))
-		if err != nil {
-			// Print the error, cast err to awserr.Error to get the Code and
-			// Message from an error.
-			log.Println("Failed to put record", err)
-			atomic.AddUint32(&failed, 1)
-		} else {
-			atomic.AddUint32(&sent, 1)
-		}
-	}
-	//duration := float64(time.Since(ts)) / float64(time.Millisecond)
+	uploader.Upload(channel, data, total)
 	// post-put
-	ticker.Stop()
-	report(sk, &sent)
-	report(fk, &failed)
-	//log.Printf("Pushed a total of %d messages (msg size %d) in %fms", total, len(data), duration)
-	//fmt.Printf("%d,%d,%d,%f\n", total, len(data), 0, duration)
+	uploader.PostUpload()
 	fmt.Printf("Pushed a message of %d bytes %d times\n", len(data), total)
 }
 
@@ -118,19 +86,30 @@ func run(brokers, channel string) {
 		svc, _ = NewKafkaSyncProducer(brokers)
 	}
 	// Instantiate rand per producer to avoid mutex contention.
-	//source := rand.NewSource(time.Now().UnixNano())
-	//generator := &BytesGenerator{generator: rand.New(source)}
-	generator, _ := NewJsonGenerator("dump", "{'id': '{{.id}}', 'timestamp': {{.timestamp}}}")
-
+	var generator RecordGenerator
+	if *msg == "" {
+		source := rand.NewSource(time.Now().UnixNano())
+		generator = &BytesGenerator{generator: rand.New(source)}
+	} else if *msg == "json" {
+		generator, _ = NewJsonGenerator("dump", "{'id': '{{.id}}', 'timestamp': {{.timestamp}}}")
+	}
 	//totals := []int{1000} //, 5000, 10000, 20000, 50000}
 	totals := []int{*total}
 	//batchs := []int{50, 100, 200, 350, 500}
-	sizes := []int{100, 300, 600, 1200, 2500, 10000}
-	//fmt.Printf("time,size,batch,duration\n")
+	var sizes []int
+	if *size > -1 {
+		sizes = []int{*size}
+	} else {
+		sizes = []int{100, 300, 600, 1200, 2500, 10000}
+	}
+	var data []byte
 	for _, size := range sizes {
-		//data := generator.Generate(size)
-		msg := Msg{id: uuid.NewV4().String(), timestamp: time.Now().Format(time.RFC3339), size: size}
-		data := generator.Generate(msg)
+		if *msg == "" {
+			data = generator.Generate(size)
+		} else if *msg == "json" {
+			msg := Msg{id: uuid.NewV4().String(), timestamp: time.Now().Format(time.RFC3339), size: size}
+			data = generator.Generate(msg)
+		}
 		for _, total := range totals {
 			// testing put
 			putRecord(svc, channel, data, total)

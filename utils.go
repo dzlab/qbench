@@ -17,7 +17,8 @@ type BytesGenerator struct {
 
 // Returns a random message generated from the chars byte slice.
 // Message length of m bytes as defined by msgSize.
-func (this *BytesGenerator) Generate(size int) []byte {
+func (this *BytesGenerator) Generate(input interface{}) []byte {
+	size := input.(int)
 	m := make([]byte, size)
 	for i := range m {
 		m[i] = chars[this.generator.Intn(len(chars))]

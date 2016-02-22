@@ -13,6 +13,7 @@ import (
 var (
 	metrics = make(map[string][]float64)
 	keys    []string
+	mutex   = &sync.Mutex{}
 )
 
 func report(key string, value *uint32) {
@@ -21,7 +22,9 @@ func report(key string, value *uint32) {
 }
 
 func reportFloat64(key string, value float64) {
+	mutex.Lock()
 	metrics[key] = append(metrics[key], value)
+	mutex.Unlock()
 }
 
 func newKey(key string) string {
