@@ -39,6 +39,7 @@ func (this *RecordUploader) PreUpload() {
 		}
 	}()
 }
+
 func (this *RecordUploader) Upload(channel string, data []byte, total int) {
 	var wg sync.WaitGroup
 	wg.Add(total)
@@ -61,7 +62,7 @@ func (this *RecordUploader) AsyncUpload(wg *sync.WaitGroup, channel string, data
 	} else {
 		atomic.AddUint32(&(this.sent), 1)
 	}
-	reportFloat64(this.dk, float64(duration.Nanoseconds())) //float64(time.Millisecond))
+	reportFloat64(this.dk, float64(duration.Nanoseconds())/float64(time.Millisecond))
 }
 
 func (this *RecordUploader) PostUpload() {

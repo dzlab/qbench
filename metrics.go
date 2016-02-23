@@ -55,7 +55,7 @@ func output() {
 	go func() {
 		defer wg.Done() // signal task done
 		dk := Filter(keys, func(k string) bool { return strings.HasPrefix(k, "duration") })
-		store("/tmp/duration.dat", dk)
+		store("/tmp/duration.dat", append([]string{"time"}, dk...))
 	}()
 	// wait for all task to finish
 	wg.Wait()
@@ -67,6 +67,7 @@ func store(filename string, keys []string) {
 	if err != nil {
 		log.Printf("Failed to open %s\n", filename)
 		log.Println(err)
+		return
 	}
 	defer f.Close()
 	// print header
@@ -78,12 +79,12 @@ func store(filename string, keys []string) {
 		header = header + key
 	}
 	f.WriteString(header + "\n")
-	log.Println(header)
+	//log.Println(header)
 	// print values
 	t := 1
 	loop := true
 	for loop {
-		row := strconv.Itoa(t)
+		row := strconv.Itoa(t - 1)
 		loop = false
 		for index, key := range keys {
 			if index > 0 {
@@ -91,13 +92,13 @@ func store(filename string, keys []string) {
 			}
 			value := metrics[key]
 			if t <= len(value) {
-				row = row + strconv.FormatFloat(value[t-1], 'f', 2, 32)
+				row = row + strconv.FormatFloat(value[t-1], 'f', 2, 64)
 				loop = true
 			}
 		}
 		if loop {
 			f.WriteString(row + "\n")
-			log.Println(row)
+			//log.Println(row)
 			t++
 		}
 	}
