@@ -10,6 +10,7 @@ import (
 	"math/rand"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -22,6 +23,7 @@ var (
 	msg     = flag.String("m", "", "Type of messages: bytes, json")
 	total   = flag.Int("t", 1000, "Total number of messages to send upstream")
 	size    = flag.Int("s", -1, "Size of messages to send upstream")
+	delay   = flag.Int("d", 0, "Delay in milliseconds between two subsequent requests")
 )
 
 type Msg struct {
@@ -30,12 +32,12 @@ type Msg struct {
 	size      int
 }
 
-func putRecord(svc Queue, channel string, data []byte, total int) {
+func putRecord(svc Queue, channel string, data []byte, total int, delay int) {
 	uploader := NewRecordUploader(svc, len(data))
 	// pre-put
 	uploader.PreUpload()
 	// put
-	uploader.Upload(channel, data, total)
+	uploader.Upload(channel, data, total, delay)
 	// post-put
 	uploader.PostUpload()
 	fmt.Printf("Pushed a message of %d bytes %d times\n", len(data), total)
@@ -80,8 +82,10 @@ func putRecordBatch(svc *firehose.Firehose, channel string, data []byte, total, 
 
 func run(brokers, channel string) {
 	var svc Queue
-	if brokers == "" {
+	if brokers == "firehose" {
 		svc, _ = newFirehose(*creds, "default", "eu-west-1")
+	} else if strings.HasPrefix(brokers, "http") {
+		svc = NewEndpoint(brokers)
 	} else {
 		svc, _ = NewKafkaSyncProducer(brokers)
 	}
@@ -112,7 +116,7 @@ func run(brokers, channel string) {
 		}
 		for _, total := range totals {
 			// testing put
-			putRecord(svc, channel, data, total)
+			putRecord(svc, channel, data, total, *delay)
 			/*for _, batch := range batchs {
 				// testing put batch
 				putRecordBuffered(svc, data, total, batch)
@@ -122,6 +126,14 @@ func run(brokers, channel string) {
 	}
 	output()
 	log.Println("Finished benchs")
+}
+
+func main2() {
+	bucket := "adomik-firehose-dump"
+	key := "2016/02/23/14/auction_stream-2-2016-02-23-14-41-29-f39a8176-9227-4e96-9fbd-41cfbc1a924a"
+	sss := NewS3("./credentials", "default", "eu-west-1")
+	log.Println(sss.GetObject(bucket, key))
+	log.Println(sss.List(bucket))
 }
 
 func main() {
@@ -139,5 +151,8 @@ func main() {
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, "Hello, %q", r.URL.Path)
 	})
-	http.ListenAndServe(":"+*port, nil)
+	err := http.ListenAndServe(":"+*port, nil)
+	if err != nil {
+		log.Fatal(err)
+	}
 }
