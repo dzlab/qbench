@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"github.com/Shopify/sarama"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
@@ -9,6 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/firehose"
 	"log"
+	"net/http"
 	"os"
 	"strings"
 )
@@ -17,6 +19,33 @@ type Queue interface {
 	PutRecord(channel string, data []byte) error
 }
 
+// HTTP endpoint
+type Endpoint struct {
+	url   string
+	token string
+}
+
+func NewEndpoint(url string) *Endpoint {
+	return &Endpoint{
+		url:   url,
+		token: "YWRtaW46YWRtaW4=",
+	}
+}
+
+func (this *Endpoint) PutRecord(channel string, data []byte) error {
+	body := bytes.NewReader(data)
+	client := &http.Client{}
+	req, err := http.NewRequest("POST", this.url, body)
+	req.Header.Add("Authorization", "Basic "+this.token)
+	_, err = client.Do(req)
+	if err != nil {
+		log.Println("Failed to PutRecord", err)
+		return err
+	}
+	return nil
+}
+
+// Firehose
 type Firehose struct {
 	svc *firehose.Firehose
 }
@@ -50,7 +79,7 @@ func newFirehoseService(filename, profile, region string) *firehose.Firehose {
 	return firehose.New(sess)
 }
 
-//
+// Kafka
 type Kafka struct {
 	sp sarama.SyncProducer
 }
