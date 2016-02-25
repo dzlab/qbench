@@ -13,5 +13,11 @@ cross-platform:
 #		done
 #	done
 
-infra:  
+# create a kafka cluster along with zookeeper instances
+kafka-cluster:  
 	ansible-playbook tools/site.yml -v --private-key=~/.ssh/data-pipeline-dev.pem -i tools/hosts
+
+beanstalk-create:
+	yes firehose-dev | eb create
+beanstalk-terminate:
+	yes firehose-dev | eb terminate

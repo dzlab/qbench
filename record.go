@@ -42,16 +42,16 @@ func (this *RecordUploader) PreUpload() {
 }
 
 // do the real upload
-func (this *RecordUploader) Upload(channel string, data []byte, total int, delay int) {
+func (this *RecordUploader) Upload(channel string, data []byte, total int, delay int64) {
 	var wg sync.WaitGroup
 	wg.Add(total)
 	if delay > 0 {
-		// send requests after delay (ms)
-		ticker := time.NewTicker(time.Duration(delay) * time.Millisecond)
+		// send requests after delay (ns)
+		ticker := time.NewTicker(time.Duration(delay))
 		count := 0
 	TickLoop:
-		for t := range ticker.C {
-			log.Printf("Ticked at %s", t)
+		for _ = range ticker.C {
+			// do the upload
 			go this.SyncUpload(&wg, channel, data)
 			count = count + 1
 			if count == total {

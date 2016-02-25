@@ -42,20 +42,20 @@ func Time(f func() error) (time.Duration, error) {
 }
 
 // print out metrics
-func output() {
+func output(workdir string) {
 	var wg sync.WaitGroup
 	wg.Add(2)
 	// print rates
 	go func() {
 		defer wg.Done() // signal task done
 		rk := Filter(keys, func(k string) bool { return strings.HasPrefix(k, "rate") })
-		store("/tmp/rates.dat", append([]string{"time"}, rk...))
+		store(workdir+"/rates.dat", append([]string{"time"}, rk...))
 	}()
 	// print durations
 	go func() {
 		defer wg.Done() // signal task done
 		dk := Filter(keys, func(k string) bool { return strings.HasPrefix(k, "duration") })
-		store("/tmp/duration.dat", append([]string{"time"}, dk...))
+		store(workdir+"/duration.dat", append([]string{"time"}, dk...))
 	}()
 	// wait for all task to finish
 	wg.Wait()

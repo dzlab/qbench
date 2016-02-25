@@ -23,7 +23,8 @@ var (
 	msg     = flag.String("m", "", "Type of messages: bytes, json")
 	total   = flag.Int("t", 1000, "Total number of messages to send upstream")
 	size    = flag.Int("s", -1, "Size of messages to send upstream")
-	delay   = flag.Int("d", 0, "Delay in milliseconds between two subsequent requests")
+	delay   = flag.Float64("d", 0.0, "Delay in milliseconds between two subsequent requests")
+	workdir = flag.String("o", "/tmp", "Working directory where metrics files will be stored")
 )
 
 type Msg struct {
@@ -32,7 +33,7 @@ type Msg struct {
 	size      int
 }
 
-func putRecord(svc Queue, channel string, data []byte, total int, delay int) {
+func putRecord(svc Queue, channel string, data []byte, total int, delay int64) {
 	uploader := NewRecordUploader(svc, len(data))
 	// pre-put
 	uploader.PreUpload()
@@ -106,6 +107,7 @@ func run(brokers, channel string) {
 	} else {
 		sizes = []int{100, 300, 600, 1200, 2500, 10000}
 	}
+	var delay_ns int64 = int64(*delay * 1e6)
 	var data []byte
 	for _, size := range sizes {
 		if *msg == "" {
@@ -116,7 +118,7 @@ func run(brokers, channel string) {
 		}
 		for _, total := range totals {
 			// testing put
-			putRecord(svc, channel, data, total, *delay)
+			putRecord(svc, channel, data, total, delay_ns)
 			/*for _, batch := range batchs {
 				// testing put batch
 				putRecordBuffered(svc, data, total, batch)
@@ -124,7 +126,7 @@ func run(brokers, channel string) {
 			}*/
 		}
 	}
-	output()
+	output(*workdir)
 	log.Println("Finished benchs")
 }
 

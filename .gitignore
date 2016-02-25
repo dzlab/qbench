@@ -3,6 +3,7 @@
 qbench
 *.dat
 *.tar.gz
+*.png
 
 # Elastic Beanstalk Files
 .elasticbeanstalk/*
