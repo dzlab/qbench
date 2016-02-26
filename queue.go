@@ -12,11 +12,15 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 )
 
+type ResultType string
+
 type Queue interface {
-	PutRecord(channel string, data []byte) error
+	PutResults() []ResultType
+	PutRecord(channel string, data []byte) ResultType
 }
 
 // HTTP endpoint
@@ -32,17 +36,21 @@ func NewEndpoint(url string) *Endpoint {
 	}
 }
 
-func (this *Endpoint) PutRecord(channel string, data []byte) error {
+func (this *Endpoint) PutResults() []ResultType {
+	return []ResultType{ResultType("2xx"), ResultType("3xx"), ResultType("4xx"), ResultType("5xx")}
+}
+
+func (this *Endpoint) PutRecord(channel string, data []byte) ResultType {
 	body := bytes.NewReader(data)
 	client := &http.Client{}
 	req, err := http.NewRequest("POST", this.url, body)
 	req.Header.Add("Authorization", "Basic "+this.token)
-	_, err = client.Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
-		log.Println("Failed to PutRecord", err)
-		return err
+		//log.Println("Failed to PutRecord", err)
+		return ResultType("failed")
 	}
-	return nil
+	return ResultType(string(strconv.Itoa(resp.StatusCode)[0]) + "xx")
 }
 
 // Firehose
@@ -50,7 +58,11 @@ type Firehose struct {
 	svc *firehose.Firehose
 }
 
-func (this *Firehose) PutRecord(channel string, data []byte) error {
+func (this *Firehose) PutResults() []ResultType {
+	return []ResultType{ResultType("sent"), ResultType("failed")}
+}
+
+func (this *Firehose) PutRecord(channel string, data []byte) ResultType {
 	params := &firehose.PutRecordInput{
 		DeliveryStreamName: aws.String(channel),
 		Record: &firehose.Record{
@@ -58,7 +70,10 @@ func (this *Firehose) PutRecord(channel string, data []byte) error {
 		},
 	}
 	_, err := this.svc.PutRecord(params)
-	return err
+	if err != nil {
+		return ResultType("failed")
+	}
+	return ResultType("sent")
 }
 
 func newFirehose(filename, profile, region string) (*Firehose, error) {
@@ -101,13 +116,21 @@ func NewKafkaSyncProducer(brokers string) (*Kafka, error) {
 	return &Kafka{sp: producer}, nil
 }
 
+// retrun all results that can be returned by a PutRecord
+func (this *Kafka) PutResults() []ResultType {
+	return []ResultType{ResultType("sent"), ResultType("failed")}
+}
+
 // publish an array of data on a Kafka channel
-func (this *Kafka) PutRecord(channel string, data []byte) error {
+func (this *Kafka) PutRecord(channel string, data []byte) ResultType {
 	//key := RandomString(8)
 	msg := sarama.ProducerMessage{Topic: channel,
 		//Key:   sarama.StringEncoder(key),
 		Value: sarama.ByteEncoder(data)}
 	partition, offset, err := this.sp.SendMessage(&msg)
 	log.Printf("Message is stored in topic(%s)/partition(%d)/offset(%d)\n", channel, partition, offset)
-	return err
+	if err != nil {
+		return ResultType("failed")
+	}
+	return ResultType("sent")
 }

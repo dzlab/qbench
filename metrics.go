@@ -32,13 +32,11 @@ func newKey(key string) string {
 	return key
 }
 
-func Time(f func() error) (time.Duration, error) {
+func Time(f func() ResultType) (time.Duration, ResultType) {
 	ts := time.Now()
-	err := f()
+	res := f()
 	duration := time.Since(ts)
-	//float64(time.Since(ts)) / float64(time.Millisecond)
-	//reportFloat64("duration", duration)
-	return duration, err
+	return duration, res
 }
 
 // print out metrics

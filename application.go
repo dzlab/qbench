@@ -41,7 +41,7 @@ func putRecord(svc Queue, channel string, data []byte, total int, delay int64) {
 	uploader.Upload(channel, data, total, delay)
 	// post-put
 	uploader.PostUpload()
-	fmt.Printf("Pushed a message of %d bytes %d times\n", len(data), total)
+	log.Printf("Pushed a message of %d bytes %d times\n", len(data), total)
 }
 
 func putRecordBuffered(svc *firehose.Firehose, channel string, data []byte, total, batch int) {
@@ -84,10 +84,13 @@ func putRecordBatch(svc *firehose.Firehose, channel string, data []byte, total, 
 func run(brokers, channel string) {
 	var svc Queue
 	if brokers == "firehose" {
+		log.Println("Uploading to Firehose")
 		svc, _ = newFirehose(*creds, "default", "eu-west-1")
 	} else if strings.HasPrefix(brokers, "http") {
+		log.Println("Uploading to an HTTP endpoint")
 		svc = NewEndpoint(brokers)
 	} else {
+		log.Println("Uploading to a Kafka cluster")
 		svc, _ = NewKafkaSyncProducer(brokers)
 	}
 	// Instantiate rand per producer to avoid mutex contention.
