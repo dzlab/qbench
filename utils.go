@@ -7,8 +7,12 @@ import (
 	"time"
 )
 
+var (
+	chars = []byte("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890!@#$^&*(){}][:<>.")
+)
+
 type RecordGenerator interface {
-	Generate(input interface{}) []byte
+	Generate(input interface{}) <-chan []byte
 }
 
 type BytesGenerator struct {
@@ -17,13 +21,20 @@ type BytesGenerator struct {
 
 // Returns a random message generated from the chars byte slice.
 // Message length of m bytes as defined by msgSize.
-func (this *BytesGenerator) Generate(input interface{}) []byte {
-	size := input.(int)
-	m := make([]byte, size)
-	for i := range m {
-		m[i] = chars[this.generator.Intn(len(chars))]
-	}
-	return m
+func (this *BytesGenerator) Generate(input interface{}) <-chan []byte {
+	channel := make(chan []byte)
+	go func() {
+		size := input.(int)
+		// serve data for ever
+		for {
+			m := make([]byte, size)
+			for i := range m {
+				m[i] = chars[this.generator.Intn(len(chars))]
+			}
+			channel <- m
+		}
+	}()
+	return channel
 }
 
 func NewJsonGenerator(name, templ string) (*JsonGenerator, error) {
@@ -41,10 +52,17 @@ type JsonGenerator struct {
 	templ *template.Template
 }
 
-func (this *JsonGenerator) Generate(data interface{}) []byte {
-	buff := bytes.NewBufferString("")
-	this.templ.Execute(buff, data)
-	return buff.Bytes()
+func (this *JsonGenerator) Generate(data interface{}) <-chan []byte {
+	channel := make(chan []byte)
+	go func() {
+		// serve data fro ever
+		for {
+			buff := bytes.NewBufferString("")
+			this.templ.Execute(buff, data)
+			channel <- buff.Bytes()
+		}
+	}()
+	return channel
 }
 
 func RandomString(strlen int) string {

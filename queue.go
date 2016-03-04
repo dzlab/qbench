@@ -25,26 +25,26 @@ type Queue interface {
 
 // HTTP endpoint
 type Endpoint struct {
-	url   string
-	token string
+	url           string
+	authorization string
 }
 
-func NewEndpoint(url string) *Endpoint {
+func NewEndpoint(url, authorization string) *Endpoint {
 	return &Endpoint{
-		url:   url,
-		token: "YWRtaW46YWRtaW4=",
+		url:           url,
+		authorization: authorization,
 	}
 }
 
 func (this *Endpoint) PutResults() []ResultType {
-	return []ResultType{ResultType("2xx"), ResultType("3xx"), ResultType("4xx"), ResultType("5xx")}
+	return []ResultType{ResultType("2xx"), ResultType("3xx"), ResultType("4xx"), ResultType("5xx"), ResultType("failed")}
 }
 
 func (this *Endpoint) PutRecord(channel string, data []byte) ResultType {
 	body := bytes.NewReader(data)
 	client := &http.Client{}
 	req, err := http.NewRequest("POST", this.url, body)
-	req.Header.Add("Authorization", "Basic "+this.token)
+	req.Header.Add("Authorization", this.authorization)
 	resp, err := client.Do(req)
 	if err != nil {
 		//log.Println("Failed to PutRecord", err)

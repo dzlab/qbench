@@ -15,9 +15,8 @@ import (
 )
 
 var (
-	chars   = []byte("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890!@#$^&*(){}][:<>.")
 	creds   = flag.String("credentials", "", "filename of AWS credentials")
-	channel = flag.String("c", "auction_stream", "Channel/topic on which the event will be pushed")
+	topic   = flag.String("c", "auction_stream", "Channel/topic on which the event will be pushed")
 	port    = flag.String("p", "", "Port number to listen on")
 	brokers = flag.String("b", "", "Kafka brokers")
 	msg     = flag.String("m", "", "Type of messages: bytes, json")
@@ -33,15 +32,15 @@ type Msg struct {
 	size      int
 }
 
-func putRecord(svc Queue, channel string, data []byte, total int, delay int64) {
-	uploader := NewRecordUploader(svc, len(data))
+func putRecord(svc Queue, topic string, channel <-chan []byte, size int, total int, delay int64) {
+	uploader := NewRecordUploader(svc, channel, size)
 	// pre-put
 	uploader.PreUpload()
 	// put
-	uploader.Upload(channel, data, total, delay)
+	uploader.Upload(topic, total, delay)
 	// post-put
 	uploader.PostUpload()
-	log.Printf("Pushed a message of %d bytes %d times\n", len(data), total)
+	log.Printf("Pushed a message of %d bytes %d times\n", size, total)
 }
 
 func putRecordBuffered(svc *firehose.Firehose, channel string, data []byte, total, batch int) {
@@ -81,14 +80,14 @@ func putRecordBatch(svc *firehose.Firehose, channel string, data []byte, total, 
 	fmt.Printf("%d,%d,%d,%f\n", total, len(data), batch, duration)
 }
 
-func run(brokers, channel string) {
+func run(brokers, topic string) {
 	var svc Queue
 	if brokers == "firehose" {
 		log.Println("Uploading to Firehose")
 		svc, _ = newFirehose(*creds, "default", "eu-west-1")
 	} else if strings.HasPrefix(brokers, "http") {
 		log.Println("Uploading to an HTTP endpoint")
-		svc = NewEndpoint(brokers)
+		svc = NewEndpoint(brokers, "Basic YWRtaW46YWRtaW4=")
 	} else {
 		log.Println("Uploading to a Kafka cluster")
 		svc, _ = NewKafkaSyncProducer(brokers)
@@ -111,17 +110,17 @@ func run(brokers, channel string) {
 		sizes = []int{100, 300, 600, 1200, 2500, 10000}
 	}
 	var delay_ns int64 = int64(*delay * 1e6)
-	var data []byte
+	var channel <-chan []byte
 	for _, size := range sizes {
 		if *msg == "" {
-			data = generator.Generate(size)
+			channel = generator.Generate(size)
 		} else if *msg == "json" {
 			msg := Msg{id: uuid.NewV4().String(), timestamp: time.Now().Format(time.RFC3339), size: size}
-			data = generator.Generate(msg)
+			channel = generator.Generate(msg)
 		}
 		for _, total := range totals {
 			// testing put
-			putRecord(svc, channel, data, total, delay_ns)
+			putRecord(svc, topic, channel, size, total, delay_ns)
 			/*for _, batch := range batchs {
 				// testing put batch
 				putRecordBuffered(svc, data, total, batch)
@@ -150,7 +149,7 @@ func main() {
 		*port = p
 	}
 	// run bench task
-	go run(*brokers, *channel)
+	go run(*brokers, *topic)
 	// serve http (for aws beanstalk)
 	log.Printf("Listening on port %s..\n", *port)
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {

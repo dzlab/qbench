@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"github.com/streamrail/concurrent-map"
+	//"github.com/streamrail/concurrent-map"
 	"log"
 	//"strconv"
 	"sync"
@@ -11,31 +11,33 @@ import (
 )
 
 type RecordUploader struct {
-	rates  cmap.ConcurrentMap
-	rks    []string
-	dks    []string
-	size   int
-	svc    Queue
-	ticker *time.Ticker
+	rates   map[string]int
+	rks     []string
+	dks     []string
+	size    int
+	svc     Queue
+	ticker  *time.Ticker
+	channel <-chan []byte
 }
 
-func NewRecordUploader(svc Queue, size int) *RecordUploader {
+func NewRecordUploader(svc Queue, channel <-chan []byte, size int) *RecordUploader {
 	rks := []string{}
 	dks := []string{}
-	rates := cmap.New()
+	rates := make(map[string]int)
 	for _, elm := range svc.PutResults() {
 		rk := newKey(fmt.Sprintf("rate-%d-%s", size, elm))
 		rks = append(rks, rk)
-		rates.Set(rk, 0)
+		rates[rk] = 0
 		dk := newKey(fmt.Sprintf("duration-%d-%s", size, elm))
 		dks = append(dks, dk)
 	}
 	return &RecordUploader{
-		rates: rates,
-		svc:   svc,
-		rks:   rks,
-		dks:   dks,
-		size:  size,
+		rates:   rates,
+		svc:     svc,
+		rks:     rks,
+		dks:     dks,
+		size:    size,
+		channel: channel,
 	}
 }
 
@@ -46,17 +48,17 @@ func (this *RecordUploader) PreUpload() {
 		for _ = range this.ticker.C {
 			// report metrics at each tick
 			for _, key := range this.rks {
-				value, _ := this.rates.Get(key)
-				this.rates.Set(key, 0)
+				value, _ := this.rates[key]
+				this.rates[key] = 0
 				//log.Println("Tick", key, value, ok)
-				reportFloat64(key, float64(value.(int)))
+				reportFloat64(key, float64(value))
 			}
 		}
 	}()
 }
 
 // do the real upload
-func (this *RecordUploader) Upload(channel string, data []byte, total int, delay int64) {
+func (this *RecordUploader) Upload(topic string, total int, delay int64) {
 	var wg sync.WaitGroup
 	wg.Add(total)
 	if delay > 0 {
@@ -66,7 +68,7 @@ func (this *RecordUploader) Upload(channel string, data []byte, total int, delay
 	TickLoop:
 		for _ = range ticker.C {
 			// do the upload
-			go this.SyncUpload(&wg, channel, data)
+			go this.SyncUpload(&wg, topic)
 			count = count + 1
 			if count == total {
 				break TickLoop
@@ -76,7 +78,7 @@ func (this *RecordUploader) Upload(channel string, data []byte, total int, delay
 	} else {
 		// send burst requests
 		for i := 0; i < total; i++ {
-			go this.SyncUpload(&wg, channel, data)
+			go this.SyncUpload(&wg, topic)
 		}
 	}
 	wg.Wait()
@@ -84,16 +86,17 @@ func (this *RecordUploader) Upload(channel string, data []byte, total int, delay
 }
 
 // execute a synchronous upload
-func (this *RecordUploader) SyncUpload(wg *sync.WaitGroup, channel string, data []byte) {
+func (this *RecordUploader) SyncUpload(wg *sync.WaitGroup, topic string) {
 	defer wg.Done()
+	data := <-this.channel
 	duration, res := Time(func() ResultType {
-		res := this.svc.PutRecord(channel, data)
+		res := this.svc.PutRecord(topic, data)
 		return res
 	})
 	// increment rates
 	rk := fmt.Sprintf("rate-%d-%s", this.size, res)
-	current, _ := this.rates.Get(rk)
-	this.rates.Set(rk, current.(int)+1)
+	current, _ := this.rates[rk]
+	this.rates[rk] = current + 1
 	// report duration
 	dk := fmt.Sprintf("duration-%d-%s", this.size, res)
 	reportFloat64(dk, float64(duration.Nanoseconds())/float64(time.Millisecond))
@@ -104,9 +107,9 @@ func (this *RecordUploader) PostUpload() {
 	this.ticker.Stop()
 	// report metrics
 	for _, key := range this.rks {
-		value, _ := this.rates.Get(key)
-		this.rates.Set(key, 0)
+		value, _ := this.rates[key]
+		this.rates[key] = 0
 		//log.Println("PostUpload", key, value)
-		reportFloat64(key, float64(value.(int)))
+		reportFloat64(key, float64(value))
 	}
 }
