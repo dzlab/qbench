@@ -26,12 +26,14 @@ type Queue interface {
 // HTTP endpoint
 type Endpoint struct {
 	url           string
+	method        string
 	authorization string
 }
 
-func NewEndpoint(url, authorization string) *Endpoint {
+func NewEndpoint(url, method, authorization string) *Endpoint {
 	return &Endpoint{
 		url:           url,
+		method:        method,
 		authorization: authorization,
 	}
 }
@@ -43,7 +45,15 @@ func (this *Endpoint) PutResults() []ResultType {
 func (this *Endpoint) PutRecord(channel string, data []byte) ResultType {
 	body := bytes.NewReader(data)
 	client := &http.Client{}
-	req, err := http.NewRequest("POST", this.url, body)
+	var req *http.Request
+	switch this.method {
+	case "GET":
+		req, _ = http.NewRequest("GET", this.url, nil)
+	case "POST":
+		req, _ = http.NewRequest("POST", this.url, body)
+	default:
+		log.Fatal("Unsupported method " + this.method)
+	}
 	req.Header.Add("Authorization", this.authorization)
 	resp, err := client.Do(req)
 	if err != nil {

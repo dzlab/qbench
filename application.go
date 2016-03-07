@@ -10,20 +10,29 @@ import (
 	"math/rand"
 	"net/http"
 	"os"
-	"strings"
 	"time"
 )
 
 var (
-	creds   = flag.String("credentials", "", "filename of AWS credentials")
-	topic   = flag.String("c", "auction_stream", "Channel/topic on which the event will be pushed")
-	port    = flag.String("p", "", "Port number to listen on")
-	brokers = flag.String("b", "", "Kafka brokers")
-	msg     = flag.String("m", "", "Type of messages: bytes, json")
-	total   = flag.Int("t", 1000, "Total number of messages to send upstream")
-	size    = flag.Int("s", -1, "Size of messages to send upstream")
-	delay   = flag.Float64("d", 0.0, "Delay in milliseconds between two subsequent requests")
-	workdir = flag.String("o", "/tmp", "Working directory where metrics files will be stored")
+	// common flags
+	commons = flag.NewFlagSet("", flag.ContinueOnError)
+	creds   = commons.String("credentials", "", "filename of AWS credentials")
+	topic   = commons.String("c", "auction_stream", "Channel/topic on which the event will be pushed")
+	port    = commons.String("p", "", "Port number to listen on")
+	msg     = commons.String("m", "", "Type of messages: bytes, json")
+	total   = commons.Int("t", 1000, "Total number of messages to send upstream")
+	size    = commons.Int("s", -1, "Size of messages to send upstream")
+	delay   = commons.Float64("d", 0.0, "Delay in milliseconds between two subsequent requests")
+	workdir = commons.String("o", "/tmp", "Working directory where metrics files will be stored")
+	// http related args
+	httpCmd    = flag.NewFlagSet("http", flag.ContinueOnError)
+	httpUrl    = httpCmd.String("u", "", "http endpoint url")
+	httpMethod = httpCmd.String("m", "", "HTTP endpoint method")
+	// firehose related args
+	firehoseCmd = flag.NewFlagSet("firehose", flag.ContinueOnError)
+	// kfka related args
+	kafkaCmd = flag.NewFlagSet("kafka", flag.ContinueOnError)
+	kBrokers = kafkaCmd.String("b", "", "Kafka brokers")
 )
 
 type Msg struct {
@@ -80,18 +89,7 @@ func putRecordBatch(svc *firehose.Firehose, channel string, data []byte, total, 
 	fmt.Printf("%d,%d,%d,%f\n", total, len(data), batch, duration)
 }
 
-func run(brokers, topic string) {
-	var svc Queue
-	if brokers == "firehose" {
-		log.Println("Uploading to Firehose")
-		svc, _ = newFirehose(*creds, "default", "eu-west-1")
-	} else if strings.HasPrefix(brokers, "http") {
-		log.Println("Uploading to an HTTP endpoint")
-		svc = NewEndpoint(brokers, "Basic YWRtaW46YWRtaW4=")
-	} else {
-		log.Println("Uploading to a Kafka cluster")
-		svc, _ = NewKafkaSyncProducer(brokers)
-	}
+func run(svc Queue, topic string) { //brokers, topic string) {
 	// Instantiate rand per producer to avoid mutex contention.
 	var generator RecordGenerator
 	if *msg == "" {
@@ -141,15 +139,43 @@ func main2() {
 }
 
 func main() {
-	flag.Parse()
-	if b := os.Getenv("BROKERS"); b != "" && *brokers == "" {
-		*brokers = b
+	// check env variables
+	if b := os.Getenv("BROKERS"); b != "" && *kBrokers == "" {
+		*kBrokers = b
 	}
 	if p := os.Getenv("PORT"); p != "" && *port == "" {
 		*port = p
 	}
+	// parse command line args
+	for i := 2; !(firehoseCmd.Parsed() || httpCmd.Parsed() || kafkaCmd.Parsed()) && i < len(os.Args); i++ {
+		switch os.Args[i-1] {
+		case "http":
+			httpCmd.Parse(os.Args[i:])
+		case "firehose":
+			firehoseCmd.Parse(os.Args[i:])
+		case "kafka":
+			kafkaCmd.Parse(os.Args[i:])
+		default:
+			//fmt.Printf("%q is not valid command.\n", os.Args[1])
+		}
+	}
+	// common arguments should be provided at first
+	commons.Parse(os.Args[1:])
+
+	// create the endpoint to be tested
+	var svc Queue
+	if firehoseCmd.Parsed() { // brokers == "firehose" {
+		log.Println("Uploading to Firehose")
+		svc, _ = newFirehose(*creds, "default", "eu-west-1")
+	} else if httpCmd.Parsed() { //strings.HasPrefix(brokers, "http") {
+		log.Println("Uploading to an HTTP endpoint")
+		svc = NewEndpoint(*httpUrl, *httpMethod, "Basic YWRtaW46YWRtaW4=")
+	} else if kafkaCmd.Parsed() {
+		log.Println("Uploading to a Kafka cluster")
+		svc, _ = NewKafkaSyncProducer(*kBrokers)
+	}
 	// run bench task
-	go run(*brokers, *topic)
+	go run(svc, *topic) //*brokers, *topic)
 	// serve http (for aws beanstalk)
 	log.Printf("Listening on port %s..\n", *port)
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
