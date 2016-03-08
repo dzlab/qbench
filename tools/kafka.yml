@@ -120,11 +120,13 @@
   environment:
     ZOOKEEPER_HOST: "{{ hostvars[groups['zookeeper_hosts'][0]]['ansible_eth0']['ipv4']['address'] }}"
     SECOR_INSTALL_DIR: /opt/secor
-    AWS_ACCESS_KEY_ID: AKIAIS6EEC3AQM6D3FJQ
-    AWS_SECRET_ACCESS_KEY: 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
   user: centos
   gather_facts: true
   tasks:
+    - name: Copy bash file that exports env variables
+      copy: src=envs dest=~/envs
+    - name: Source bash file
+      shell: source ~/envs
     - name: install supervisor
       become: yes
       shell: easy_install supervisor
