@@ -1,0 +1,114 @@
+# source: http://www.gwynprice.com/2015/11/03/ansible-playbook-to-create-ec2-instances-and-an-elb-on-aws/
+---
+# create security group
+- hosts: localhost
+  connection: local
+  gather_facts: False
+  tasks:
+    - name: web servers security group
+      ec2_group:
+        name: web-servers-sg
+        description: EC2 group for web servers
+        vpc_id: vpc-be157ddb
+        region: eu-west-1
+        rules:
+          - proto: tcp
+            from_port: 22
+            to_port: 22
+            cidr_ip: 0.0.0.0/0
+          - proto: tcp
+            from_port: 80
+            to_port: 80
+            cidr_ip: 0.0.0.0/0
+
+- name: A simple Load Balanced AWS web servers using the Amazon standard linux AMI
+  hosts: localhost
+  connection: local
+  gather_facts: False
+  tasks:
+    - name: spin up the webserver instances
+      ec2:
+        key_name: data-pipeline-dev
+        instance_type: t2.medium
+        region: eu-west-1
+        #image: ami-33734044
+        image: ami-e4ff5c93
+        group: web-servers-sg
+        vpc_subnet_id: subnet-a9a28ade
+        assign_public_ip: yes
+        wait: yes
+        exact_count: 1
+        instance_tags:
+           group: apiservers
+        count_tag:
+           group: apiservers
+      register: created
+    - name: Add all instance public IPs to host group
+      add_host: hostname={{ item.public_ip }} groups=nginx_hosts
+      with_items: created.tagged_instances
+    - name: Wait for SSH to come up
+      wait_for: host={{ item.public_dns_name }} port=22 delay=60 timeout=320 state=started
+      with_items: created.instances
+
+- name: configure the apiservers (install nginx and a hello world page)
+  hosts: nginx_hosts
+  remote_user: centos
+  become: True  
+  gather_facts: True
+  #roles:
+  #  - nginx
+  tasks:
+    - name: NGINX | Installing extra packages
+      yum: name=epel-release state=latest 
+    - name: NGINX | Installing NGINX
+      yum: name=nginx state=latest
+    - name: copy configuration script and execute it
+      script: install_nginx.sh 
+    - name: NGINX | Starting NGINX
+      shell: nginx 
+
+- name: setup a load balancer
+  hosts: localhost
+  connection: local
+  gather_facts: False
+  vars:
+    BUCKET: "adomik-firehose-dump"
+  tasks:
+    - name: setup a simple load balancer
+      ec2_elb_lb:
+        name: api-endpoint-elb
+        state: present
+        region: eu-west-1
+        subnets:
+          - subnet-a9a28ade
+        security_group_names:
+          - web-servers-sg
+        listeners:
+          - protocol: http
+            load_balancer_port: 80
+            instance_port: 80
+        health_check:
+            ping_protocol: http # options are http, https, ssl, tcp
+            ping_port: 80
+            ping_path: "/index.html" # not required for tcp or ssl
+            response_timeout: 5 # seconds
+            interval: 30 # seconds
+            unhealthy_threshold: 2
+            healthy_threshold: 10
+        access_logs:
+          interval: 5 # minutes (defaults to 60)
+          s3_location: "{{ BUCKET }}" 
+          s3_prefix: "elblogs"              
+      register: api-endpoint-elb
+
+    - name: add the  webservers to the load balancer
+      ec2_elb:
+        instance_id: "{{ item.id }}"
+        ec2_elbs: 
+          - api-endpoint-elb
+        state: present
+        region: eu-west-1
+      with_items: created.tagged_instances
+
+
+

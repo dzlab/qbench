@@ -15,7 +15,10 @@ cross-platform:
 
 # create a kafka cluster along with zookeeper instances
 kafka-cluster:  
-	ansible-playbook tools/kafka.yml -v --private-key=~/.ssh/data-pipeline-dev.pem -i tools/hosts
+	ansible-playbook tools/kafka.yml -v -i tools/hosts
+# create an elb with nginx 
+nginx-cluster:
+	ansible-playbook tools/nginx.yml -v -i tools/hosts
 
 beanstalk-create:
 	yes firehose-dev | eb create
