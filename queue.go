@@ -9,6 +9,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/ec2metadata"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/firehose"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
@@ -25,6 +26,7 @@ type Queue interface {
 
 // HTTP endpoint
 type Endpoint struct {
+	client        *http.Client
 	url           string
 	method        string
 	authorization string
@@ -32,6 +34,9 @@ type Endpoint struct {
 
 func NewEndpoint(url, method, authorization string) *Endpoint {
 	return &Endpoint{
+		client: &http.Client{
+			Transport: &http.Transport{DisableKeepAlives: true},
+		},
 		url:           url,
 		method:        method,
 		authorization: authorization,
@@ -43,23 +48,25 @@ func (this *Endpoint) PutResults() []ResultType {
 }
 
 func (this *Endpoint) PutRecord(channel string, data []byte) ResultType {
-	body := bytes.NewReader(data)
-	client := &http.Client{}
 	var req *http.Request
 	switch this.method {
 	case "GET":
 		req, _ = http.NewRequest("GET", this.url, nil)
 	case "POST":
+		body := bytes.NewReader(data)
 		req, _ = http.NewRequest("POST", this.url, body)
 	default:
 		log.Fatal("Unsupported method " + this.method)
 	}
 	req.Header.Add("Authorization", this.authorization)
-	resp, err := client.Do(req)
+	resp, err := this.client.Do(req)
 	if err != nil {
-		//log.Println("Failed to PutRecord", err)
+		log.Println(err)
 		return ResultType("failed")
 	}
+	// read entire body to be able to reuse connections
+	defer resp.Body.Close()
+	_, err = ioutil.ReadAll(resp.Body)
 	return ResultType(string(strconv.Itoa(resp.StatusCode)[0]) + "xx")
 }
 
