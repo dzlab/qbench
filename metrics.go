@@ -59,6 +59,40 @@ func output(workdir string) {
 	wg.Wait()
 }
 
+type FileWriter struct {
+	f      *os.File
+	output chan []byte
+}
+
+func NewFileWriter(filename string) (*FileWriter, error) {
+	f, err := os.Create(filename)
+	if err != nil {
+		log.Printf("Failed to open %s\n", filename)
+		return nil, err
+	}
+	writer := &FileWriter{f: f}
+	writer.Initialize()
+	return writer, nil
+}
+
+func (this *FileWriter) Initialize() {
+	channel := make(chan []byte)
+	go func() {
+		nw := []byte("\n")
+		for {
+			data := <-channel
+			this.f.Write(data)
+			this.f.Write(nw)
+		}
+	}()
+	this.output = channel
+}
+
+func (this *FileWriter) Close() {
+	this.f.Close()
+	close(this.output)
+}
+
 // store a collection of metrics into a file
 func store(filename string, keys []string) {
 	f, err := os.Create(filename)

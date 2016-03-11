@@ -1,4 +1,4 @@
-package main
+package main // import "github.com/dzlab/qbench"
 
 import (
 	"flag"
@@ -41,8 +41,8 @@ type Msg struct {
 	size      int
 }
 
-func putRecord(svc Queue, topic string, channel <-chan []byte, size int, total int, delay int64) {
-	uploader := NewRecordUploader(svc, channel, size)
+func putRecord(svc Queue, topic string, input <-chan []byte, ro chan<- []byte, do chan<- []byte, size int, total int, delay int64) {
+	uploader := NewRecordUploader(svc, input, ro, do, size)
 	// pre-put
 	uploader.PreUpload()
 	// put
@@ -108,17 +108,19 @@ func run(svc Queue, topic string) { //brokers, topic string) {
 		sizes = []int{100, 300, 600, 1200, 2500, 10000}
 	}
 	var delay_ns int64 = int64(*delay * 1e6)
-	var channel <-chan []byte
+	var input <-chan []byte
+	rw, _ := NewFileWriter(*workdir + "/rates.dat")
+	dw, _ := NewFileWriter(*workdir + "/duration.dat")
 	for _, size := range sizes {
 		if *msg == "" {
-			channel = generator.Generate(size)
+			input = generator.Generate(size)
 		} else if *msg == "json" {
 			msg := Msg{id: uuid.NewV4().String(), timestamp: time.Now().Format(time.RFC3339), size: size}
-			channel = generator.Generate(msg)
+			input = generator.Generate(msg)
 		}
 		for _, total := range totals {
 			// testing put
-			putRecord(svc, topic, channel, size, total, delay_ns)
+			putRecord(svc, topic, input, rw.output, dw.output, size, total, delay_ns)
 			/*for _, batch := range batchs {
 				// testing put batch
 				putRecordBuffered(svc, data, total, batch)
@@ -126,7 +128,8 @@ func run(svc Queue, topic string) { //brokers, topic string) {
 			}*/
 		}
 	}
-	output(*workdir)
+	rw.Close()
+	dw.Close()
 	log.Println("Finished benchs")
 }
 
