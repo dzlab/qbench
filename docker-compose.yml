@@ -1,0 +1,7 @@
+qbench:
+  image: dzlabs/qbench
+  command: /qbench -t 10000 -s 1000 -p 8080 http -u http://hb-endpoint-elb-1722231236.eu-west-1.elb.amazonaws.com -m GET
+  volumes:
+    - /tmp:/tmp
+  ports:
+    - "8080:8080"

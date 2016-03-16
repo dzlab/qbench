@@ -4,6 +4,21 @@ deps:
 build:
 	go build 
 
+dockerize:
+	export PWD=`pwd`
+	docker run --rm -v "$(PWD):/src" -v /var/run/docker.sock:/var/run/docker.sock centurylink/golang-builder
+	docker build -t qbench .
+	docker tag -f qbench dzlabs/qbench
+	docker push dzlabs/qbench:latest
+# to run: docker run -it --rm --name qbech-running qbench qbench -t 1000 -p 8080 -s 1000 http -u http://hb-endpoint-elb-1722231236.eu-west-1.elb.amazonaws.com -m GET
+
+ecs-configure:
+	ecs-cli configure --cluster qbench-cluster --region eu-west-1
+	
+ecs-run:	
+	ecs-cli up --keypair data-pipeline-dev --capability-iam --size 2 --instance-type t2.medium
+	ecs-cli compose --file docker-compose.yml up
+
 cross-platform:
 	GOOS=linux GOARCH=amd64 go build
 #	for GOOS in linux; do
