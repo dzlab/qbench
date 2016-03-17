@@ -1,4 +1,4 @@
-package main
+package bench
 
 import (
 	"github.com/aws/aws-sdk-go/aws"

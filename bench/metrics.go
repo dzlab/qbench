@@ -1,4 +1,4 @@
-package main
+package bench
 
 import (
 	"log"
@@ -61,7 +61,7 @@ func output(workdir string) {
 
 type FileWriter struct {
 	f      *os.File
-	output chan []byte
+	Output chan []byte
 }
 
 func NewFileWriter(filename string) (*FileWriter, error) {
@@ -85,12 +85,12 @@ func (this *FileWriter) Initialize() {
 			this.f.Write(nw)
 		}
 	}()
-	this.output = channel
+	this.Output = channel
 }
 
 func (this *FileWriter) Close() {
 	this.f.Close()
-	close(this.output)
+	close(this.Output)
 }
 
 // store a collection of metrics into a file

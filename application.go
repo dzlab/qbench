@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/firehose"
+	"github.com/dzlab/qbench/bench"
 	"github.com/satori/go.uuid"
 	"log"
 	"math/rand"
@@ -41,8 +42,8 @@ type Msg struct {
 	size      int
 }
 
-func putRecord(svc Queue, topic string, input <-chan []byte, ro chan<- []byte, do chan<- []byte, size int, total int, delay int64) {
-	uploader := NewRecordUploader(svc, input, ro, do, size)
+func putRecord(svc bench.Queue, topic string, input <-chan []byte, ro chan<- []byte, do chan<- []byte, size int, total int, delay int64) {
+	uploader := bench.NewRecordUploader(svc, input, ro, do, size)
 	// pre-put
 	uploader.PreUpload()
 	// put
@@ -89,15 +90,9 @@ func putRecordBatch(svc *firehose.Firehose, channel string, data []byte, total, 
 	fmt.Printf("%d,%d,%d,%f\n", total, len(data), batch, duration)
 }
 
-func run(svc Queue, topic string) { //brokers, topic string) {
+func run(svc bench.Queue, topic string) { //brokers, topic string) {
 	// Instantiate rand per producer to avoid mutex contention.
-	var generator RecordGenerator
-	if *msg == "" {
-		source := rand.NewSource(time.Now().UnixNano())
-		generator = &BytesGenerator{generator: rand.New(source)}
-	} else if *msg == "json" {
-		generator, _ = NewJsonGenerator("dump", "{'id': '{{.id}}', 'timestamp': {{.timestamp}}}")
-	}
+	var generator bench.RecordGenerator
 	//totals := []int{1000} //, 5000, 10000, 20000, 50000}
 	totals := []int{*total}
 	//batchs := []int{50, 100, 200, 350, 500}
@@ -109,18 +104,21 @@ func run(svc Queue, topic string) { //brokers, topic string) {
 	}
 	var delay_ns int64 = int64(*delay * 1e6)
 	var input <-chan []byte
-	rw, _ := NewFileWriter(*workdir + "/rates.dat")
-	dw, _ := NewFileWriter(*workdir + "/duration.dat")
+	rw, _ := bench.NewFileWriter(*workdir + "/rates.dat")
+	dw, _ := bench.NewFileWriter(*workdir + "/duration.dat")
 	for _, size := range sizes {
 		if *msg == "" {
-			input = generator.Generate(size)
+			source := rand.NewSource(time.Now().UnixNano())
+			generator = &bench.BytesGenerator{Random: rand.New(source), Size: size}
+			input = generator.Generate()
 		} else if *msg == "json" {
 			msg := Msg{id: uuid.NewV4().String(), timestamp: time.Now().Format(time.RFC3339), size: size}
-			input = generator.Generate(msg)
+			generator, _ = bench.NewJsonGenerator("dump", "{'id': '{{.id}}', 'timestamp': {{.timestamp}}}", msg)
+			input = generator.Generate()
 		}
 		for _, total := range totals {
 			// testing put
-			putRecord(svc, topic, input, rw.output, dw.output, size, total, delay_ns)
+			putRecord(svc, topic, input, rw.Output, dw.Output, size, total, delay_ns)
 			/*for _, batch := range batchs {
 				// testing put batch
 				putRecordBuffered(svc, data, total, batch)
@@ -136,7 +134,7 @@ func run(svc Queue, topic string) { //brokers, topic string) {
 func main2() {
 	bucket := "adomik-firehose-dump"
 	key := "2016/02/23/14/auction_stream-2-2016-02-23-14-41-29-f39a8176-9227-4e96-9fbd-41cfbc1a924a"
-	sss := NewS3("./credentials", "default", "eu-west-1")
+	sss := bench.NewS3("./credentials", "default", "eu-west-1")
 	log.Println(sss.GetObject(bucket, key))
 	log.Println(sss.List(bucket))
 }
@@ -166,16 +164,16 @@ func main() {
 	commons.Parse(os.Args[1:])
 
 	// create the endpoint to be tested
-	var svc Queue
+	var svc bench.Queue
 	if firehoseCmd.Parsed() { // brokers == "firehose" {
 		log.Println("Uploading to Firehose")
-		svc, _ = newFirehose(*creds, "default", "eu-west-1")
+		svc, _ = bench.NewFirehose(*creds, "default", "eu-west-1")
 	} else if httpCmd.Parsed() { //strings.HasPrefix(brokers, "http") {
 		log.Println("Uploading to an HTTP endpoint")
-		svc = NewEndpoint(*httpUrl, *httpMethod, "Basic YWRtaW46YWRtaW4=")
+		svc = bench.NewEndpoint(*httpUrl, *httpMethod, "Basic YWRtaW46YWRtaW4=")
 	} else if kafkaCmd.Parsed() {
 		log.Println("Uploading to a Kafka cluster")
-		svc, _ = NewKafkaSyncProducer(*kBrokers)
+		svc, _ = bench.NewKafkaSyncProducer(*kBrokers)
 	}
 	// run bench task
 	go run(svc, *topic) //*brokers, *topic)

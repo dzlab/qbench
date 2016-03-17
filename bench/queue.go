@@ -1,4 +1,4 @@
-package main
+package bench
 
 import (
 	"bytes"
@@ -93,7 +93,7 @@ func (this *Firehose) PutRecord(channel string, data []byte) ResultType {
 	return ResultType("sent")
 }
 
-func newFirehose(filename, profile, region string) (*Firehose, error) {
+func NewFirehose(filename, profile, region string) (*Firehose, error) {
 	return &Firehose{svc: newFirehoseService(filename, profile, region)}, nil
 }
 

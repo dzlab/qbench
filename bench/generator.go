@@ -1,4 +1,4 @@
-package main
+package bench
 
 import (
 	"bytes"
@@ -189,8 +189,8 @@ func (this *IncrementGenerator) Generate() <-chan []byte {
  * A generator of random bytes data
  */
 type BytesGenerator struct {
-	generator *rand.Rand
-	size      int
+	Random *rand.Rand
+	Size   int
 }
 
 // Returns a random message generated from the chars byte slice.
@@ -200,9 +200,9 @@ func (this *BytesGenerator) Generate() <-chan []byte {
 	go func() {
 		// serve data for ever
 		for {
-			m := make([]byte, this.size)
+			m := make([]byte, this.Size)
 			for i := range m {
-				m[i] = chars[this.generator.Intn(len(chars))]
+				m[i] = chars[this.Random.Intn(len(chars))]
 			}
 			channel <- m
 		}
