@@ -38,7 +38,7 @@ func TestDateGenerator(t *testing.T) {
 
 // test for incremental integer generator
 func TestIncrementGenerator(t *testing.T) {
-	g, err := NewIncrementGenerator("5")
+	g, err := NewIncrementGenerator(5)
 	CheckTrue(t, err == nil, "Should not fail to convert integer")
 	c := g.Generate()
 	actual := []string{string(<-c), string(<-c), string(<-c), string(<-c), string(<-c), string(<-c), string(<-c), string(<-c)}
@@ -51,7 +51,7 @@ func TestIncrementGenerator(t *testing.T) {
 
 // test for floating point number generator
 func TestFloatGenerator(t *testing.T) {
-	g, err := NewFloatGenerator("-28.0168595", "52.5388779")
+	g, err := NewFloatGenerator(-28.0168595, 52.5388779)
 	CheckTrue(t, err == nil, "Should not fail to convert integer")
 	c := g.Generate()
 	actual := []string{string(<-c), string(<-c), string(<-c), string(<-c), string(<-c), string(<-c), string(<-c), string(<-c)}
@@ -70,8 +70,13 @@ func TestFloatGenerator(t *testing.T) {
  * Test pick values generator
  */
 func TestPickGenerator(t *testing.T) {
+	// pick from file
+	g, err := NewPickFromFileGenerator("/non/existant.file")
+	CheckTrue(t, err != nil, "Should return an error when reading from non existant file")
+	CheckTrue(t, g == nil, "Should return a nil generator when reading from non existant file")
+	// pick from values
 	values := []string{"A", "B", "C", "D", "E"}
-	g, err := NewPickFromValuesGenerator(values)
+	g, err = NewPickFromValuesGenerator(values)
 	CheckTrue(t, err == nil, "Should not fail to create a generator from valid input")
 	c := g.Generate()
 	actual := []string{string(<-c), string(<-c), string(<-c), string(<-c), string(<-c), string(<-c), string(<-c), string(<-c)}

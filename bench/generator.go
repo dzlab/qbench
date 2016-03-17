@@ -71,17 +71,9 @@ type FloatGenerator struct {
 /*
  * Create a new float generator
  */
-func NewFloatGenerator(min, max string) (*FloatGenerator, error) {
-	minf, err := strconv.ParseFloat(min, 64)
-	if err != nil {
-		return nil, err
-	}
-	maxf, err := strconv.ParseFloat(max, 64)
-	if err != nil {
-		return nil, err
-	}
+func NewFloatGenerator(min, max float64) (*FloatGenerator, error) {
 	source := rand.NewSource(time.Now().UnixNano())
-	return &FloatGenerator{random: rand.New(source), min: minf, interval: (maxf - minf)}, nil
+	return &FloatGenerator{random: rand.New(source), min: min, interval: (max - min)}, nil
 }
 
 /*
@@ -157,18 +149,8 @@ type IncrementGenerator struct {
 /*
  * Create a new incremental values generator
  */
-func NewIncrementGenerator(initial string) (*IncrementGenerator, error) {
-	var val int
-	var err error
-	if initial == "" {
-		val = 0
-	} else {
-		val, err = strconv.Atoi(initial)
-		if err != nil {
-			return nil, err
-		}
-	}
-	return &IncrementGenerator{current: val}, nil
+func NewIncrementGenerator(initial int) (*IncrementGenerator, error) {
+	return &IncrementGenerator{current: initial}, nil
 }
 
 /*
