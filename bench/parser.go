@@ -91,6 +91,34 @@ func (this *Object) GetJSON() string {
 }
 
 /*
+ * Generate infinitely JSON data
+ */
+func (this *Object) JSONGenerator() <-chan []byte {
+	channel := make(chan []byte)
+	go func() {
+		for {
+			data := this.GetJSON()
+			channel <- []byte(data)
+		}
+	}()
+	return channel
+}
+
+/*
+ * Generate infinitely KV data
+ */
+func (this *Object) KVGenerator(sep1, sep2 string) <-chan []byte {
+	channel := make(chan []byte)
+	go func() {
+		for {
+			data := this.GetKV(sep1, sep2)
+			channel <- []byte(data)
+		}
+	}()
+	return channel
+}
+
+/*
  * Parse generator definitions
  */
 func (this *Parser) parseGenerators(objects []interface{}) {

@@ -6,9 +6,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/firehose"
 	"github.com/dzlab/qbench/bench"
-	"github.com/satori/go.uuid"
 	"log"
-	"math/rand"
 	"net/http"
 	"os"
 	"time"
@@ -20,7 +18,7 @@ var (
 	creds   = commons.String("credentials", "", "filename of AWS credentials")
 	topic   = commons.String("c", "auction_stream", "Channel/topic on which the event will be pushed")
 	port    = commons.String("p", "", "Port number to listen on")
-	msg     = commons.String("m", "", "Type of messages: bytes, json")
+	schema  = commons.String("f", "", "Schema file to use when generating objects")
 	total   = commons.Int("t", 1000, "Total number of messages to send upstream")
 	size    = commons.Int("s", -1, "Size of messages to send upstream")
 	delay   = commons.Float64("d", 0.0, "Delay in milliseconds between two subsequent requests")
@@ -42,15 +40,15 @@ type Msg struct {
 	size      int
 }
 
-func putRecord(svc bench.Queue, topic string, input <-chan []byte, ro chan<- []byte, do chan<- []byte, size int, total int, delay int64) {
-	uploader := bench.NewRecordUploader(svc, input, ro, do, size)
+func putRecord(svc bench.Queue, topic string, input <-chan []byte, ro chan<- []byte, do chan<- []byte, total int, delay int64) {
+	uploader := bench.NewRecordUploader(svc, input, ro, do)
 	// pre-put
 	uploader.PreUpload()
 	// put
 	uploader.Upload(topic, total, delay)
 	// post-put
 	uploader.PostUpload()
-	log.Printf("Pushed a message of %d bytes %d times\n", size, total)
+	log.Printf("Pushed a message %d times\n", total)
 }
 
 func putRecordBuffered(svc *firehose.Firehose, channel string, data []byte, total, batch int) {
@@ -91,40 +89,34 @@ func putRecordBatch(svc *firehose.Firehose, channel string, data []byte, total, 
 }
 
 func run(svc bench.Queue, topic string) { //brokers, topic string) {
-	// Instantiate rand per producer to avoid mutex contention.
-	var generator bench.RecordGenerator
-	//totals := []int{1000} //, 5000, 10000, 20000, 50000}
-	totals := []int{*total}
 	//batchs := []int{50, 100, 200, 350, 500}
-	var sizes []int
-	if *size > -1 {
-		sizes = []int{*size}
-	} else {
-		sizes = []int{100, 300, 600, 1200, 2500, 10000}
-	}
 	var delay_ns int64 = int64(*delay * 1e6)
 	var input <-chan []byte
 	rw, _ := bench.NewFileWriter(*workdir + "/rates.dat")
 	dw, _ := bench.NewFileWriter(*workdir + "/duration.dat")
-	for _, size := range sizes {
-		if *msg == "" {
-			generator, _ = qbench.NewFixedSizeStringGenerator(size)
-			input = generator.Generate()
-		} else if *msg == "json" {
-			msg := Msg{id: uuid.NewV4().String(), timestamp: time.Now().Format(time.RFC3339), size: size}
-			generator, _ = bench.NewJsonGenerator("dump", "{'id': '{{.id}}', 'timestamp': {{.timestamp}}}", msg)
-			input = generator.Generate()
+	switch *schema {
+	case "":
+		generator, _ := bench.NewFixedSizeStringGenerator(*size)
+		input = generator.Generate()
+	default:
+		p := bench.NewParser()
+		object, err := p.Parse(*schema)
+		if err != nil {
+			panic(err)
 		}
-		for _, total := range totals {
-			// testing put
-			putRecord(svc, topic, input, rw.Output, dw.Output, size, total, delay_ns)
-			/*for _, batch := range batchs {
-				// testing put batch
-				putRecordBuffered(svc, data, total, batch)
-				putRecordBatch(svc, data, total, batch)
-			}*/
+		if *httpMethod == "GET" {
+			input = object.KVGenerator("=", "&")
+		} else {
+			input = object.JSONGenerator()
 		}
 	}
+	// testing put
+	putRecord(svc, topic, input, rw.Output, dw.Output, *total, delay_ns)
+	/*for _, batch := range batchs {
+		// testing put batch
+		putRecordBuffered(svc, data, total, batch)
+		putRecordBatch(svc, data, total, batch)
+	}*/
 	rw.Close()
 	dw.Close()
 	log.Println("Finished benchs")

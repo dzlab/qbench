@@ -15,7 +15,6 @@ type RecordUploader struct {
 	rates  map[string]int
 	rks    []string
 	dks    []string
-	size   int
 	svc    Queue
 	ticker *time.Ticker
 	input  <-chan []byte
@@ -23,15 +22,15 @@ type RecordUploader struct {
 	do     chan<- []byte
 }
 
-func NewRecordUploader(svc Queue, input <-chan []byte, ro chan<- []byte, do chan<- []byte, size int) *RecordUploader {
+func NewRecordUploader(svc Queue, input <-chan []byte, ro chan<- []byte, do chan<- []byte) *RecordUploader {
 	rks := []string{}
 	dks := []string{}
 	rates := make(map[string]int)
 	for _, elm := range svc.PutResults() {
-		rk := newKey(fmt.Sprintf("rate-%d-%s", size, elm))
+		rk := newKey(fmt.Sprintf("rate-%s", elm))
 		rks = append(rks, rk)
 		rates[rk] = 0
-		dk := newKey(fmt.Sprintf("duration-%d-%s", size, elm))
+		dk := newKey(fmt.Sprintf("duration-%s", elm))
 		dks = append(dks, dk)
 	}
 	// write headers
@@ -42,7 +41,6 @@ func NewRecordUploader(svc Queue, input <-chan []byte, ro chan<- []byte, do chan
 		svc:   svc,
 		rks:   rks,
 		dks:   dks,
-		size:  size,
 		input: input, // input channel for randomly generated data
 		ro:    ro,    // output channel to write rate metrics data
 		do:    do,    // output channel to write duration metrics data
@@ -125,11 +123,11 @@ func (this *RecordUploader) SyncUpload(wg *sync.WaitGroup, topic string) {
 		return res
 	})
 	// increment rates
-	rk := fmt.Sprintf("rate-%d-%s", this.size, res)
+	rk := fmt.Sprintf("rate-%s", res)
 	current, _ := this.rates[rk]
 	this.rates[rk] = current + 1
 	// report duration
-	dk := fmt.Sprintf("duration-%d-%s", this.size, res)
+	dk := fmt.Sprintf("duration-%s", res)
 	this.reportDuration(dk, duration)
 }
 

@@ -47,14 +47,19 @@ func (this *Endpoint) PutResults() []ResultType {
 	return []ResultType{ResultType("2xx"), ResultType("3xx"), ResultType("4xx"), ResultType("5xx"), ResultType("failed")}
 }
 
+/*
+ * Send data via http
+ */
 func (this *Endpoint) PutRecord(channel string, data []byte) ResultType {
+	url := this.url
 	var req *http.Request
 	switch this.method {
 	case "GET":
-		req, _ = http.NewRequest("GET", this.url, nil)
+		url += "?" + string(data)
+		req, _ = http.NewRequest("GET", url, nil)
 	case "POST":
 		body := bytes.NewReader(data)
-		req, _ = http.NewRequest("POST", this.url, body)
+		req, _ = http.NewRequest("POST", url, body)
 	default:
 		log.Fatal("Unsupported method " + this.method)
 	}
