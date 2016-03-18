@@ -108,8 +108,7 @@ func run(svc bench.Queue, topic string) { //brokers, topic string) {
 	dw, _ := bench.NewFileWriter(*workdir + "/duration.dat")
 	for _, size := range sizes {
 		if *msg == "" {
-			source := rand.NewSource(time.Now().UnixNano())
-			generator = &bench.BytesGenerator{Random: rand.New(source), Size: size}
+			generator, _ = qbench.NewFixedSizeStringGenerator(size)
 			input = generator.Generate()
 		} else if *msg == "json" {
 			msg := Msg{id: uuid.NewV4().String(), timestamp: time.Now().Format(time.RFC3339), size: size}

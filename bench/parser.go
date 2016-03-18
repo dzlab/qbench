@@ -116,7 +116,15 @@ func (this *Parser) parseGenerators(objects []interface{}) {
 			}
 		case "increment":
 			generator, err = NewIncrementGenerator(o["initial"].(int))
+		case "string":
+			// generated fixed size or variable sizes strings
+			if o["size"] != nil {
+				generator, err = NewFixedSizeStringGenerator(o["size"].(int))
+			} else if o["min_size"] != nil && o["max_size"] != nil {
+				generator, err = NewVariableSizeStringGenerator(o["min_size"].(int), o["max_size"].(int))
+			}
 		}
+		// if no error than register the generator for future use
 		if err == nil {
 			this.generators[name] = generator
 			this.channels[name] = generator.Generate()

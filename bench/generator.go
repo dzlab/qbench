@@ -171,8 +171,36 @@ func (this *IncrementGenerator) Generate() <-chan []byte {
  * A generator of random bytes data
  */
 type BytesGenerator struct {
-	Random *rand.Rand
-	Size   int
+	random   *rand.Rand
+	size     int
+	min      int
+	interval int
+}
+
+/*
+ * Create a generator for fixed size strings
+ */
+func NewFixedSizeStringGenerator(size int) (*BytesGenerator, error) {
+	source := rand.NewSource(time.Now().UnixNano())
+	return &BytesGenerator{random: rand.New(source), size: size, min: -1, interval: -1}, nil
+}
+
+/*
+ * Create a generator for variable size strings
+ */
+func NewVariableSizeStringGenerator(min, max int) (*BytesGenerator, error) {
+	source := rand.NewSource(time.Now().UnixNano())
+	return &BytesGenerator{random: rand.New(source), size: -1, min: min, interval: (max - min)}, nil
+}
+
+/*
+ * Calcaulate the rigth size to use whether fixed or variable
+ */
+func (this *BytesGenerator) Size() int {
+	if this.size > -1 {
+		return this.size
+	}
+	return this.min + this.random.Intn(this.interval)
 }
 
 // Returns a random message generated from the chars byte slice.
@@ -182,9 +210,9 @@ func (this *BytesGenerator) Generate() <-chan []byte {
 	go func() {
 		// serve data for ever
 		for {
-			m := make([]byte, this.Size)
+			m := make([]byte, this.Size())
 			for i := range m {
-				m[i] = chars[this.Random.Intn(len(chars))]
+				m[i] = chars[this.random.Intn(len(chars))]
 			}
 			channel <- m
 		}
