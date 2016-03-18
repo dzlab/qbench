@@ -15,6 +15,8 @@ func main() {
 	}
 	// generate some data
 	for i := 0; i < 10; i++ {
-		log.Println(i, ">", object.GetKV(","))
+		log.Println(i, ">", object.GetKV("=", "&"))
+		log.Println(i, ">", object.GetJSON())
+
 	}
 }
